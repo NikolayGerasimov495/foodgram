@@ -1,8 +1,8 @@
+from api.views import (CustomUserViewSet, FavoriteViewSet, IngredientViewSet,
+                       RecipeViewSet, ShoppingCartViewSet, SubscriptionViewSet,
+                       TagViewSet)
 from django.urls import include, path
 from rest_framework import routers
-
-from api.views import (FavoriteViewSet, CustomUserViewSet, RecipeViewSet, TagViewSet, IngredientViewSet,
-                       SubscriptionViewSet, ShoppingCartViewSet)
 
 app_name = 'api'
 
@@ -21,16 +21,18 @@ urlpatterns = [
         'post': 'subscribe',
         'delete': 'unsubscribe'
     })),
-    path('users/me/', CustomUserViewSet.as_view({'get': 'me'}), name='user-me'),
-    path('users/me/avatar/', CustomUserViewSet.as_view({'put': 'avatar', 'delete': 'delete_avatar'}),
-         name='user-avatar'),
-    path('recipes/<int:pk>/favorite/', FavoriteViewSet.as_view({'post': 'create', 'delete': 'destroy'}),
-         name='recipe-favorite'),
-    path('recipes/<int:pk>/shopping_cart/', ShoppingCartViewSet.as_view({'post': 'create', 'delete': 'destroy'}),
-         name='recipe-shopping-cart'),
-    path('recipes/download_shopping_cart/', ShoppingCartViewSet.as_view({'get': 'download_shopping_cart'})),
+    path('users/me/', CustomUserViewSet.as_view(
+        {'get': 'me'}), name='user-me'),
+    path('users/me/avatar/', CustomUserViewSet.as_view(
+        {'put': 'avatar', 'delete': 'delete_avatar'}), name='user-avatar'),
+    path('recipes/<int:pk>/favorite/', FavoriteViewSet.as_view(
+        {'post': 'create', 'delete': 'destroy'}), name='recipe-favorite'),
+    path('recipes/<int:pk>/shopping_cart/', ShoppingCartViewSet.as_view(
+        {'post': 'create', 'delete': 'destroy'}), name='recipe-shopping-cart'),
+    path('recipes/download_shopping_cart/', ShoppingCartViewSet.as_view(
+        {'get': 'download_shopping_cart'})),
 
     path('', include(router.urls)),
-    path('auth/', include('djoser.urls')),  # Работа с пользователями 127.0.0.1:8000/api/auth/users/
+    path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.authtoken')),
 ]
