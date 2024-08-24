@@ -12,7 +12,8 @@ class CustomUser(AbstractUser):
                                   'unique': 'Данный адрес уже используется'})
     username = models.CharField('Уникальный юзернейм', max_length=150,
                                 unique=True, blank=False,
-                                error_messages={'unique': 'Пользователь с таким именем уже существует'})
+                                error_messages={'unique':
+                                                    'Пользователь с таким именем уже существует'})
     first_name = models.CharField('Имя', max_length=150, blank=False)
     last_name = models.CharField('Фамилия', max_length=150, blank=False)
     avatar = models.ImageField('Ссылка на аватар', blank=True, null=True)

@@ -200,7 +200,8 @@ class CustomUserViewSet(joser_views.UserViewSet):
             request.user, context={'request': request})
         return Response(serializer.data)
 
-    @action(detail=False, methods=['put'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['put'], 
+            permission_classes=[IsAuthenticated])
     def avatar(self, request):
         # проверка ограничений
         user = request.user

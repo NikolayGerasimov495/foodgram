@@ -21,7 +21,7 @@ class Recipe(models.Model):
                                   verbose_name='Список тегов')
     cooking_time = models.PositiveIntegerField(
         'Время приготовления (в минутах)',
-        default=1, 
+        default=1,
         validators=[MinValueValidator(1, 'Время готовки минимум одна минута')])
 
     class Meta:
@@ -58,7 +58,7 @@ class Ingredient(models.Model):
 
 
 class IngredientInRecipe(models.Model):
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, 
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE,
                                verbose_name='Рецепт', max_length=128,
                                related_name='ingredients_in_recipe')
     ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE,
