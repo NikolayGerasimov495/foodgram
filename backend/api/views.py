@@ -43,7 +43,7 @@ class CustomUserViewSet(joser_views.UserViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['put'], url_path='me/avatar',
-            permission_classes=(IsAuthenticated, ))
+            permission_classes=(IsAuthenticated,))
     def avatar(self, request):
         user = request.user
         serilazer = AvatarSerializer(data=request.data)
@@ -124,7 +124,7 @@ class IngredientViewSet(viewsets.ModelViewSet):
 
 class ShoppingCartViewSet(viewsets.ModelViewSet):
     queryset = ShoppingCart.objects.all()
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated,)
     serializer_class = ObjectWithRecipeUserCreateDeleteSerializer
 
     def get_serializer_context(self):
@@ -165,8 +165,8 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         ).annotate(
             quantity=Sum(
                 'ingredients__ingredients_in_recipe__amount',
-                filter=Q(ingredients__ingredients_in_recipe__recipe_id__in
-                         =recipes_id)
+                filter=Q(
+                    ingredients__ingredients_in_recipe__recipe_id__in=recipes_id)
             )
         ).distinct().values_list(
             'quantity', 'ingredients_in_recipe__ingredient__name',
@@ -189,7 +189,7 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
 
 class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated,)
 
     def create(self, request, pk):
         return self.create_object(
@@ -210,7 +210,7 @@ class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
 
 
 class SubscriptionViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated,)
 
     @action(methods=["GET"], detail=False)
     def subscriptions(self, request, *args, **kwargs):
