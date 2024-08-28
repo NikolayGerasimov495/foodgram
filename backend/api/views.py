@@ -8,7 +8,9 @@ from djoser import views as joser_views
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly, SAFE_METHODS)
+                                        IsAuthenticatedOrReadOnly,
+                                        SAFE_METHODS
+                                        )
 from rest_framework.response import Response
 from rest_framework import permissions
 
@@ -17,7 +19,8 @@ from api.permissions import IsAuthor
 from api.serializers import (AvatarSerializer, CustomUserSerializer,
                              IngredientSerializer,
                              ObjectWithRecipeUserCreateDeleteSerializer,
-                             RecipeCreateUpdateSerializer, RecipeMinifiedSerializer,
+                             RecipeCreateUpdateSerializer,
+                             RecipeMinifiedSerializer,
                              RecipeSerializer,
                              SubscribeCreateDeleteSerializer, TagSerializer,
                              UserWithRecipesSerializer)
@@ -31,7 +34,9 @@ class CustomUserViewSet(joser_views.UserViewSet):
     def get_queryset(self):
         return CustomUser.objects.all()
 
-    @action(detail=False, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
+    @action(detail=False,
+            methods=['GET'],
+            permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
         serializer = CustomUserSerializer(
             request.user, context={'request': request})
@@ -128,14 +133,19 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
     def destroy(self, request, pk):
         # TODO
         # Я думаю, что метод destroy не является лишним.
-        # В запросе нам передается pk рецепта, а не записи из таблицы ShoppingCart.
-        # Это значит, что используя стандартную логику ModelViewSet, он будет пытаться получить объект из таблицы
+        # В запросе нам передается pk рецепта, а не записи из таблицы
+        # ShoppingCart.
+        # Это значит, что используя стандартную логику ModelViewSet, он будет
+        # пытаться получить объект из таблицы
         # ShoppingCart, а значит мы получим неверный результат.
-        # И также нам все равно понадобятся кастомные валидации, поэтому нужно будет расширять стандартное поведение
+        # И также нам все равно понадобятся кастомные валидации, поэтому нужно
+        # будет расширять стандартное поведение
         # ModelViewSet.
 
-        # Комментарий по методу create(), я выполнил, но думаю, что это тоже не самая лучшая реализация в данном случае.
-        # Так как мы работаем с промежуточной таблицей, а параметр маршрута является id-ом рецепта.
+        # Комментарий по методу create(), я выполнил, но думаю, что это тоже
+        # не самая лучшая реализация в данном случае.
+        # Так как мы работаем с промежуточной таблицей, а параметр маршрута
+        # является id-ом рецепта.
         # TODO
         serializer = ObjectWithRecipeUserCreateDeleteSerializer(
             data={'recipe_id': pk},

@@ -138,7 +138,9 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
 
         recipe.tags.set(validated_data['tags'])
 
-        self.set_ingredients_to_recipe(recipe=recipe, ingredients=validated_data['ingredients'])
+        self.set_ingredients_to_recipe(
+            recipe=recipe,
+            ingredients=validated_data['ingredients'])
         return recipe
 
     @transaction.atomic
@@ -151,7 +153,9 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
 
         instance.tags.set(validated_data['tags'])
 
-        self.set_ingredients_to_recipe(recipe=instance, ingredients=validated_data['ingredients'])
+        self.set_ingredients_to_recipe(
+            recipe=instance,
+            ingredients=validated_data['ingredients'])
         return instance
 
     @staticmethod
@@ -173,7 +177,9 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             recipe.save()
 
     def to_representation(self, instance):
-        return RecipeSerializer(instance, context={'request': self.context['request']}).data
+        return RecipeSerializer(
+            instance,
+            context={'request': self.context['request']}).data
 
 
 class RecipeMinifiedSerializer(serializers.ModelSerializer):
@@ -220,8 +226,10 @@ class SubscribeCreateDeleteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         author = get_object_or_404(CustomUser, id=attrs['author_id'])
-        subscription_presence = Subscription.objects.filter(user=self.context['request'].user,
-                                                            author=author).exists()
+        subscription_presence = (
+            Subscription.objects.filter(
+                user=self.context['request'].user,
+                author=author).exists())
         if self.context['request'].method == 'POST':
             if author == self.context['request'].user:
                 raise ValidationError(
