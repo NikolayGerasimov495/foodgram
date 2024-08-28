@@ -165,10 +165,8 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         ).annotate(
             quantity=Sum(
                 'ingredients__ingredients_in_recipe__amount',
-                filter=Q(
-                    ingredients__ingredients_in_recipe__recipe_id__in=
-                    recipes_id
-                )
+                filter=Q(ingredients__ingredients_in_recipe__recipe_id__in
+                         =recipes_id)
             )
         ).distinct().values_list(
             'quantity', 'ingredients_in_recipe__ingredient__name',
