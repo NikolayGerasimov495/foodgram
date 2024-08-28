@@ -160,17 +160,14 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
     def download_shopping_cart(self, request):
         recipes_id = ShoppingCart.objects.filter(
             user=request.user).values_list('recipe__pk', flat=True)
-        recipes = Recipe.objects.filter(
+        recipes = (Recipe.objects.filter(
             id__in=recipes_id
-        ).annotate(
-            quantity=Sum(
-                'ingredients__ingredients_in_recipe__amount',
-                filter=Q(
-                    ingredients__ingredients_in_recipe__recipe_id__in=recipes_id)
-            )
-        ).distinct().values_list(
+        ).annotate(quantity=Sum(
+            'ingredients__ingredients_in_recipe__amount', filter=Q(
+                ingredients__ingredients_in_recipe__recipe_id__in=recipes_id)
+            )).distinct().values_list(
             'quantity', 'ingredients_in_recipe__ingredient__name',
-            'ingredients_in_recipe__ingredient__measurement_unit'
+            'ingredients_in_recipe__ingredient__measurement_unit')
         )
         result = ''
         for i in range(len(recipes)):
