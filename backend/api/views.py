@@ -166,7 +166,8 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
             quantity=Sum(
                 'ingredients__ingredients_in_recipe__amount',
                 filter=Q(
-                    ingredients__ingredients_in_recipe__recipe_id__in=recipes_id
+                    ingredients__ingredients_in_recipe__recipe_id__in=
+                    recipes_id
                 )
             )
         ).distinct().values_list(
@@ -175,7 +176,9 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         )
         result = ''
         for i in range(len(recipes)):
-            result += f'|{recipes[i][1]}| --- |{recipes[i][2]}| --- |{recipes[i][0]}|\n'
+            result += (f'|{recipes[i][1]}| --- '
+                       f'|{recipes[i][2]}| --- '
+                       f'|{recipes[i][0]}|\n')
         text = io.BytesIO()
         with io.TextIOWrapper(text, encoding="utf-8", write_through=True) as f:
             f.write(result)
