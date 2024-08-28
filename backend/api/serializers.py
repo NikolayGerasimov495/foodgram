@@ -1,28 +1,16 @@
-import base64
-
-from api.validators import username_validator
-from django.core.files.base import ContentFile
 from django.db import transaction
-from recipes.models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
-                            ShoppingCart, Tag)
+
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.relations import PrimaryKeyRelatedField
-from users.models import CustomUser, Subscription
 
+from api.fields import Base64ImageField
+from api.validators import username_validator
 from foodgram import settings
-
-
-class Base64ImageField(serializers.ImageField):
-    def to_internal_value(self, data):
-        if isinstance(data, str) and data.startswith('data:image'):
-            format, imgstr = data.split(';base64,')
-            ext = format.split('/')[-1]
-
-            data = ContentFile(base64.b64decode(imgstr), name='temp.' + ext)
-
-        return super().to_internal_value(data)
+from recipes.models import (Favorite, Ingredient, IngredientInRecipe, Recipe,
+                            ShoppingCart, Tag)
+from users.models import CustomUser, Subscription
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -104,12 +92,12 @@ class IngredientForRecipeSerializer(serializers.ModelSerializer):
         )
 
 
-class RecipeCreateSerializer(serializers.ModelSerializer):
+class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     ingredients = IngredientForRecipeSerializer(many=True)
     tags = PrimaryKeyRelatedField(queryset=Tag.objects.all(),
                                   many=True)
-    image = Base64ImageField()
     cooking_time = serializers.IntegerField(required=True, min_value=1)
+    image = Base64ImageField(required=False)
 
     class Meta:
         model = Recipe
@@ -121,11 +109,6 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             'text',
             'cooking_time',
         )
-
-    def validate_image(self, value):
-        if not self.instance and not value:
-            raise ValidationError('Image is required')
-        return value
 
     def validate(self, attrs):
         ingredients_values = []
@@ -142,53 +125,55 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             raise ValidationError('Тэги должны быть уникальными')
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
-        user = self.context['request'].user
+        if not validated_data.get('image'):
+            raise ValidationError('Image is required')
 
-        with transaction.atomic():
-            recipe = Recipe.objects.create(
-                author=user,
-                name=validated_data['name'],
-                image=validated_data['image'],
-                text=validated_data['text'],
-                cooking_time=validated_data['cooking_time']
-            )
+        valid_data = dict(validated_data)
+        del valid_data['ingredients']
+        del valid_data['tags']
 
-            recipe.tags.set(validated_data['tags'])
+        recipe = Recipe.objects.create(**valid_data)
 
-            for ingredient in validated_data['ingredients']:
-                IngredientInRecipe.objects.create(
-                    recipe=recipe,
-                    ingredient=ingredient['id'],
-                    amount=ingredient['amount']
-                )
+        recipe.tags.set(validated_data['tags'])
+
+        self.set_ingredients_to_recipe(recipe=recipe, ingredients=validated_data['ingredients'])
         return recipe
 
-
-class RecipeUpdateSerializer(RecipeCreateSerializer):
-    image = Base64ImageField(required=False)
-
+    @transaction.atomic
     def update(self, instance, validated_data):
+        valid_data = dict(validated_data)
+        del valid_data['ingredients']
+        del valid_data['tags']
+
+        instance = super().update(instance, valid_data)
+
+        instance.tags.set(validated_data['tags'])
+
+        self.set_ingredients_to_recipe(recipe=instance, ingredients=validated_data['ingredients'])
+        return instance
+
+    @staticmethod
+    def set_ingredients_to_recipe(recipe, ingredients):
         with transaction.atomic():
-            # Обновляем базовые поля рецепта
-            instance.name = validated_data['name']
-            instance.text = validated_data['text']
-            instance.cooking_time = validated_data['cooking_time']
-            if validated_data.get('image'):
-                instance.image = validated_data['image']
+            ingredient_list = []
 
-            instance.tags.set(validated_data['tags'])
-
-            instance.ingredients.clear()
-            for ingredient in validated_data['ingredients']:
-                IngredientInRecipe.objects.create(
-                    recipe=instance,
-                    ingredient=ingredient['id'],
-                    amount=ingredient['amount']
+            recipe.ingredients.clear()
+            for ingredient in ingredients:
+                ingredient_list.append(
+                    IngredientInRecipe(
+                        recipe=recipe,
+                        ingredient=ingredient['id'],
+                        amount=ingredient['amount']
+                    )
                 )
 
-            instance.save()
-        return instance
+            IngredientInRecipe.objects.bulk_create(ingredient_list)
+            recipe.save()
+
+    def to_representation(self, instance):
+        return RecipeSerializer(instance, context={'request': self.context['request']}).data
 
 
 class RecipeMinifiedSerializer(serializers.ModelSerializer):
@@ -235,16 +220,16 @@ class SubscribeCreateDeleteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         author = get_object_or_404(CustomUser, id=attrs['author_id'])
+        subscription_presence = Subscription.objects.filter(user=self.context['request'].user,
+                                                            author=author).exists()
         if self.context['request'].method == 'POST':
             if author == self.context['request'].user:
                 raise ValidationError(
                     'Вы не можете подписаться на самого себя')
-            if Subscription.objects.filter(user=self.context['request'].user,
-                                           author=author).exists():
+            if subscription_presence:
                 raise ValidationError('Вы уже подписаны на этого пользователя')
         else:
-            if not Subscription.objects.filter(
-                    user=self.context['request'].user, author=author).exists():
+            if not subscription_presence:
                 raise ValidationError(
                     'Вы еще не подписаны на этого пользователя')
 
@@ -259,25 +244,26 @@ class SubscribeCreateDeleteSerializer(serializers.ModelSerializer):
 
 
 class ObjectWithRecipeUserCreateDeleteSerializer(serializers.ModelSerializer):
-    recipe_id = serializers.IntegerField()
+    pk = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Recipe
         fields = (
-            'recipe_id',
+            'pk',
         )
 
     def validate(self, attrs):
-        recipe = get_object_or_404(Recipe, id=attrs['recipe_id'])
+        pk = self.context['request'].parser_context['kwargs']['pk']
+        recipe = get_object_or_404(Recipe, id=pk)
+        obj_model_presence = self.context['model'].objects.filter(
+            user=self.context['request'].user, recipe=recipe).exists()
         if self.context['request'].method == 'POST':
-            if self.context['model'].objects.filter(
-                    user=self.context['request'].user, recipe=recipe).exists():
+            if obj_model_presence:
                 raise ValidationError(
                     f"Вы уже добавиляли этот рецепт в "
                     f"{self.context['model'].__name__}.")
         else:
-            if not self.context['model'].objects.filter(
-                    user=self.context['request'].user, recipe=recipe).exists():
+            if not obj_model_presence:
                 raise ValidationError(
                     f"Вы еще не добавиляли этот рецепт в "
                     f"{self.context['model'].__name__}.")
@@ -286,6 +272,9 @@ class ObjectWithRecipeUserCreateDeleteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         obj = self.context['model'].objects.create(
             user=self.context['request'].user,
-            recipe_id=validated_data['recipe_id']
+            recipe_id=self.context['request'].parser_context['kwargs']['pk']
         )
         return obj.recipe
+
+    def to_representation(self, instance):
+        return RecipeMinifiedSerializer(instance).data

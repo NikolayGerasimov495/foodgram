@@ -1,25 +1,58 @@
-import os
+import io
 
+from django.db.models import Sum, Q
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from djoser import views as joser_views
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import (IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly, SAFE_METHODS)
+from rest_framework.response import Response
+from rest_framework import permissions
+
+from api.mixins import CreateDestroyObjectMixin
 from api.permissions import IsAuthor
 from api.serializers import (AvatarSerializer, CustomUserSerializer,
                              IngredientSerializer,
                              ObjectWithRecipeUserCreateDeleteSerializer,
-                             RecipeCreateSerializer, RecipeMinifiedSerializer,
-                             RecipeSerializer, RecipeUpdateSerializer,
+                             RecipeCreateUpdateSerializer, RecipeMinifiedSerializer,
+                             RecipeSerializer,
                              SubscribeCreateDeleteSerializer, TagSerializer,
                              UserWithRecipesSerializer)
-from django.conf import settings
-from django.http import FileResponse
-from django.shortcuts import get_object_or_404
-from django_filters.rest_framework import DjangoFilterBackend
-from djoser import views as joser_views
 from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
-from rest_framework import status, viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import (IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
-from rest_framework.response import Response
 from users.models import CustomUser, Subscription
+
+
+class CustomUserViewSet(joser_views.UserViewSet):
+    serializer_class = CustomUserSerializer
+
+    def get_queryset(self):
+        return CustomUser.objects.all()
+
+    @action(detail=False, methods=['GET'], permission_classes=[permissions.IsAuthenticated])
+    def me(self, request):
+        serializer = CustomUserSerializer(
+            request.user, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['put'], url_path='me/avatar',
+            permission_classes=(IsAuthenticated, ))
+    def avatar(self, request):
+        user = request.user
+        serilazer = AvatarSerializer(data=request.data)
+        serilazer.is_valid(raise_exception=True)
+        user.avatar = serilazer.validated_data['avatar']
+        user.save()
+        return Response({'avatar': user.avatar.url}, status=status.HTTP_200_OK)
+
+    @avatar.mapping.delete
+    def delete_avatar(self, request):
+        user = request.user
+        user.avatar = None
+        user.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -48,33 +81,19 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    def create(self, request, *args, **kwargs):
-        serializer = RecipeCreateSerializer(data=request.data, context={
-            'request': request
-        })
-        serializer.is_valid(raise_exception=True)
-        recipe = serializer.save()
-        return Response(
-            RecipeSerializer(recipe, context={'request': request}).data,
-            status=status.HTTP_201_CREATED
-        )
-
-    def partial_update(self, request, pk):
-        recipe = get_object_or_404(Recipe, id=pk)
-        # self.permission_classes = (IsAuthor, )
-        self.check_object_permissions(request, recipe)
-        serializer = RecipeUpdateSerializer(data=request.data, instance=recipe)
-        serializer.is_valid(raise_exception=True)
-        recipe = serializer.save()
-        return Response(
-            RecipeSerializer(recipe, context={'request': request}).data
-        )
-
     @action(methods=["GET"], detail=True, url_path="get-link")
     def get_link(self, request, pk):
         recipe = get_object_or_404(Recipe, id=pk)
         short_link = f"{request.scheme}://{request.get_host()}/s/d3{recipe.id}"
         return Response({"short-link": short_link})
+
+    def get_serializer_class(self, *args, **kwargs):
+        if self.request.method in SAFE_METHODS:
+            return RecipeSerializer
+        return RecipeCreateUpdateSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
 
 
 class TagViewSet(viewsets.ModelViewSet):
@@ -94,27 +113,30 @@ class IngredientViewSet(viewsets.ModelViewSet):
         queryset = self.queryset
         name = self.request.query_params.get('name')
         if name:
-            queryset = queryset.filter(name__icontains=name)
+            queryset = queryset.filter(name__istartswith=name)
         return queryset
 
 
 class ShoppingCartViewSet(viewsets.ModelViewSet):
     queryset = ShoppingCart.objects.all()
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated, )
+    serializer_class = ObjectWithRecipeUserCreateDeleteSerializer
 
-    def create(self, request, pk):
-        serializer = ObjectWithRecipeUserCreateDeleteSerializer(
-            data={'recipe_id': pk},
-            context={'request': request, 'model': ShoppingCart}
-        )
-        serializer.is_valid(raise_exception=True)
-        recipe = serializer.save()
-        return Response(
-            RecipeMinifiedSerializer(recipe).data,
-            status=status.HTTP_201_CREATED
-        )
+    def get_serializer_context(self):
+        return {'request': self.request, 'model': ShoppingCart}
 
     def destroy(self, request, pk):
+        # TODO
+        # Я думаю, что метод destroy не является лишним.
+        # В запросе нам передается pk рецепта, а не записи из таблицы ShoppingCart.
+        # Это значит, что используя стандартную логику ModelViewSet, он будет пытаться получить объект из таблицы
+        # ShoppingCart, а значит мы получим неверный результат.
+        # И также нам все равно понадобятся кастомные валидации, поэтому нужно будет расширять стандартное поведение
+        # ModelViewSet.
+
+        # Комментарий по методу create(), я выполнил, но думаю, что это тоже не самая лучшая реализация в данном случае.
+        # Так как мы работаем с промежуточной таблицей, а параметр маршрута является id-ом рецепта.
+        # TODO
         serializer = ObjectWithRecipeUserCreateDeleteSerializer(
             data={'recipe_id': pk},
             context={'request': request, 'model': ShoppingCart}
@@ -126,139 +148,84 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def download_shopping_cart(self, request):
-        user = request.user
-        shopping_cart = ShoppingCart.objects.filter(user=user)
-        if not shopping_cart.exists():
-            return Response({'detail': 'Ваш список покупок пуст'},
-                            status=status.HTTP_404_NOT_FOUND)
-
-        ingredients = {}
-        for item in shopping_cart:
-            for ingredient in item.recipe.ingredients.all():
-                if ingredient.name in ingredients:
-                    ingredients[ingredient.name]['amount'] \
-                        += item.recipe.ingredients_in_recipe.get(
-                        ingredient=ingredient).amount
-                else:
-                    ingredients[ingredient.name] = {
-                        'amount': item.recipe.ingredients_in_recipe.get(
-                            ingredient=ingredient).amount,
-                        'unit': ingredient.measurement_unit
-                    }
-
-        shopping_list = '\n'.join([f'{name} - {item["amount"]} {item["unit"]}'
-                                   for name, item in ingredients.items()])
-        file_path = os.path.join(settings.MEDIA_ROOT, 'shopping_list.txt')
-        with open(file_path, 'w') as f:
-            f.write(shopping_list)
-
-        response = FileResponse(open(file_path, 'rb'),
-                                content_type='text/plain')
-        response['Content-Disposition'] = ('attachment; '
-                                           'filename="shopping_list.txt"')
-        return response
+        recipes_id = ShoppingCart.objects.filter(
+            user=request.user).values_list('recipe__pk', flat=True)
+        recipes = Recipe.objects.filter(
+            id__in=recipes_id
+        ).annotate(
+            quantity=Sum(
+                'ingredients__ingredients_in_recipe__amount',
+                filter=Q(
+                    ingredients__ingredients_in_recipe__recipe_id__in=recipes_id
+                )
+            )
+        ).distinct().values_list(
+            'quantity', 'ingredients_in_recipe__ingredient__name',
+            'ingredients_in_recipe__ingredient__measurement_unit'
+        )
+        result = ''
+        for i in range(len(recipes)):
+            result += f'|{recipes[i][1]}| --- |{recipes[i][2]}| --- |{recipes[i][0]}|\n'
+        text = io.BytesIO()
+        with io.TextIOWrapper(text, encoding="utf-8", write_through=True) as f:
+            f.write(result)
+            response = HttpResponse(text.getvalue(), content_type="text/plain")
+            response[
+                "Content-Disposition"
+            ] = "attachment; filename=shopping_list.txt"
+            return response
 
 
-class FavoriteViewSet(viewsets.ModelViewSet):
+class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated, )
 
     def create(self, request, pk):
-        serializer = ObjectWithRecipeUserCreateDeleteSerializer(
-            data={'recipe_id': pk},
-            context={'request': request, 'model': Favorite}
-        )
-        serializer.is_valid(raise_exception=True)
-        recipe = serializer.save()
-        return Response(
-            RecipeMinifiedSerializer(recipe).data,
-            status=status.HTTP_201_CREATED
+        return self.create_object(
+            input_serializer=ObjectWithRecipeUserCreateDeleteSerializer,
+            serializer_data={'recipe_id': pk},
+            serializer_context={'request': request, 'model': Favorite},
+            output_serializer=RecipeMinifiedSerializer
         )
 
     def destroy(self, request, pk):
-        serializer = ObjectWithRecipeUserCreateDeleteSerializer(
-            data={'recipe_id': pk},
-            context={'request': request, 'model': Favorite}
+        return self.destroy_object(
+            input_serializer=ObjectWithRecipeUserCreateDeleteSerializer,
+            serializer_data={'recipe_id': pk},
+            serializer_context={'request': request, 'model': Favorite},
+            model=Favorite,
+            extra_data={'user': request.user}
         )
-        serializer.is_valid(raise_exception=True)
-
-        Favorite.objects.get(user=request.user, recipe_id=pk).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class CustomUserViewSet(joser_views.UserViewSet):
-    serializer_class = CustomUserSerializer
-
-    def get_queryset(self):
-        return CustomUser.objects.all()
-
-    @action(detail=False, methods=['get'])
-    def me(self, request):
-        self.permission_classes = (IsAuthenticated,)
-        self.check_permissions(request)
-        serializer = CustomUserSerializer(
-            request.user, context={'request': request})
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['put'],
-            permission_classes=[IsAuthenticated])
-    def avatar(self, request):
-        # проверка ограничений
-        user = request.user
-        self.permission_classes = [IsAuthenticated]
-        self.check_permissions(request)
-        # валидация данных
-        serilazer = AvatarSerializer(data=request.data)
-        serilazer.is_valid(raise_exception=True)
-        # бизнес-логика
-        user.avatar = serilazer.validated_data['avatar']
-        user.save()
-        # подготовка ответа
-        return Response({'avatar': user.avatar.url}, status=status.HTTP_200_OK)
-
-    @avatar.mapping.delete
-    def delete_avatar(self, request):
-        user = request.user
-        self.permission_classes = [IsAuthenticated]
-        self.check_permissions(request)
-
-        user.avatar = None
-        user.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+class SubscriptionViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
+    permission_classes = (IsAuthenticated, )
 
     @action(methods=["GET"], detail=False)
     def subscriptions(self, request, *args, **kwargs):
-        my_subscribes = Subscription.objects.filter(
+        subscribes = Subscription.objects.filter(
             user=request.user).values_list('author_id', flat=True)
         self.queryset = CustomUser.objects.prefetch_related('recipes').filter(
-            id__in=my_subscribes)
+            id__in=subscribes)
         self.serializer_class = UserWithRecipesSerializer
         return super().list(request, args, kwargs)
 
     @action(detail=True, methods=['post'])
     def subscribe(self, request, pk=None):
-        serializer = SubscribeCreateDeleteSerializer(
-            data={'author_id': pk},
-            context={'request': request}
-        )
-        serializer.is_valid(raise_exception=True)
-        author = serializer.save()
-        return Response(
-            UserWithRecipesSerializer(author,
-                                      context={'request': request}).data,
-            status=status.HTTP_201_CREATED
+        return self.create_object(
+            input_serializer=SubscribeCreateDeleteSerializer,
+            serializer_data={'author_id': pk},
+            serializer_context={'request': request},
+            output_serializer=UserWithRecipesSerializer,
+            output_serializer_context={'request': request}
         )
 
     @action(methods=['DELETE'], detail=True)
     def unsubscribe(self, request, pk=None):
-        serializer = SubscribeCreateDeleteSerializer(
-            data={'author_id': pk},
-            context={'request': request}
+        return self.destroy_object(
+            input_serializer=SubscribeCreateDeleteSerializer,
+            serializer_data={'author_id': pk},
+            serializer_context={'request': request},
+            model=Subscription,
+            extra_data={'user': request.user}
         )
-        serializer.is_valid(raise_exception=True)
-        Subscription.objects.get(user=request.user, author_id=pk).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)

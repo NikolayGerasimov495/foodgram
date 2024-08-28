@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
 from django.db import models
+
 from users.models import CustomUser
 
 User = get_user_model()
@@ -46,8 +47,8 @@ class Tag(models.Model):
 
 
 class Ingredient(models.Model):
-    name = models.CharField(max_length=128, unique=True)
-    measurement_unit = models.CharField(max_length=64)
+    name = models.CharField('Название ингредиента',max_length=128, unique=True)
+    measurement_unit = models.CharField('Единица измерения',max_length=64)
 
     class Meta:
         verbose_name = 'Ингредиент'
@@ -70,6 +71,10 @@ class IngredientInRecipe(models.Model):
     class Meta:
         verbose_name = 'Рецепт/Ингредиент'
         verbose_name_plural = 'Рецепты/Ингредиенты'
+        constraints = [
+            models.UniqueConstraint(fields=['recipe', 'ingredient'],
+                                    name='unique_recipe_ingredient')
+        ]
 
     def __str__(self):
         return f'{self.recipe}/{self.ingredient}/{self.amount}'
@@ -84,6 +89,10 @@ class Favorite(models.Model):
     class Meta:
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранные'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'recipe'],
+                                    name='unique_favorite')
+        ]
 
     def __str__(self):
         return f'{self.user}/{self.recipe}'
@@ -97,6 +106,11 @@ class ShoppingCart(models.Model):
 
     class Meta:
         verbose_name = 'Корзина покупок'
+        verbose_name_plural = 'Корзина покупок'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'recipe'],
+                                    name='unique_shopping_cart')
+        ]
 
     def __str__(self):
         return f'{self.user}/{self.recipe}'
