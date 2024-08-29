@@ -131,12 +131,12 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        recipe = Recipe.objects.create(author=self.context['request'].user,
-                                       name=validated_data['name'],
-                                       text=validated_data['text'],
-                                       cooking_time=validated_data['cooking_time'],
-                                       image=validated_data.get('image', None)
-                                       )
+        recipe = Recipe.objects.create(
+            author=self.context['request'].user,
+            name=validated_data['name'],
+            text=validated_data['text'],
+            cooking_time=validated_data['cooking_time'],
+            image=validated_data.get('image', None))
         recipe.tags.set(validated_data['tags'])
 
         self.set_ingredients_to_recipe(
