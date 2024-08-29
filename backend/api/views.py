@@ -162,13 +162,14 @@ class ShoppingCartViewSet(CreateDestroyObjectMixin,
         with io.TextIOWrapper(text, encoding="utf-8", write_through=True) as f:
             f.write(result)
             response = HttpResponse(text.getvalue(), content_type="text/plain")
-            response["Content-Disposition"] = "attachment; filename=shopping_list.txt"
+            response["Content-Disposition"] = ("attachment; "
+                                               "filename=shopping_list.txt")
             return response
 
 
 #TODO
-# Извините, но я не понимаю данный комментарий.
-# Что Вы имеете ввиду? Прошлый комментарий учтен, миксин есть.
+#Извините, но я не понимаю данный комментарий.
+#Что Вы имеете ввиду? Прошлый комментарий учтен, миксин есть.
 #TODO
 class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
