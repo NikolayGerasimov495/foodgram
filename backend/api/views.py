@@ -167,10 +167,10 @@ class ShoppingCartViewSet(CreateDestroyObjectMixin,
             return response
 
 
-#TODO
-#Извините, но я не понимаю данный комментарий.
-#Что Вы имеете ввиду? Прошлый комментарий учтен, миксин есть.
-#TODO
+# TODO
+# Извините, но я не понимаю данный комментарий.
+# Что Вы имеете ввиду? Прошлый комментарий учтен, миксин есть.
+# TODO
 class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
     permission_classes = (IsAuthenticated,)
