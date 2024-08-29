@@ -37,14 +37,5 @@ class CreateDestroyObjectMixin:
             context=serializer_context or {}
         )
         serializer.is_valid(raise_exception=True)
-        # TODO
-        # Точно ли стоит переносить логику удаления объекта в сериализатор?
-        # Если не ошибаюсь, он предоставляет два стандартных метода: create(),
-        # update()
-        # которые мы можем использовать для реализации бизнес логики.
-        # https://www.cdrf.co/3.14/rest_framework.serializers/ModelSerializer.html
-        # - прочитал тут.
-        # TODO
         model.objects.get(**(serializer_data | extra_data)).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
