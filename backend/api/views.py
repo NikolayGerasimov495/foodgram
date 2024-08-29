@@ -122,7 +122,8 @@ class IngredientViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class ShoppingCartViewSet(viewsets.ModelViewSet):
+class ShoppingCartViewSet(CreateDestroyObjectMixin,
+                          viewsets.ModelViewSet):
     queryset = ShoppingCart.objects.all()
     permission_classes = (IsAuthenticated,)
     serializer_class = ObjectWithRecipeUserCreateDeleteSerializer
@@ -131,60 +132,44 @@ class ShoppingCartViewSet(viewsets.ModelViewSet):
         return {'request': self.request, 'model': ShoppingCart}
 
     def destroy(self, request, pk):
-        # TODO
-        # Я думаю, что метод destroy не является лишним.
-        # В запросе нам передается pk рецепта, а не записи из таблицы
-        # ShoppingCart.
-        # Это значит, что используя стандартную логику ModelViewSet, он будет
-        # пытаться получить объект из таблицы
-        # ShoppingCart, а значит мы получим неверный результат.
-        # И также нам все равно понадобятся кастомные валидации, поэтому нужно
-        # будет расширять стандартное поведение
-        # ModelViewSet.
-
-        # Комментарий по методу create(), я выполнил, но думаю, что это тоже
-        # не самая лучшая реализация в данном случае.
-        # Так как мы работаем с промежуточной таблицей, а параметр маршрута
-        # является id-ом рецепта.
-        # TODO
-        serializer = ObjectWithRecipeUserCreateDeleteSerializer(
-            data={'recipe_id': pk},
-            context={'request': request, 'model': ShoppingCart}
+        return self.destroy_object(
+            input_serializer=ObjectWithRecipeUserCreateDeleteSerializer,
+            serializer_data={'recipe_id': pk},
+            serializer_context={'request': request, 'model': ShoppingCart},
+            model=ShoppingCart,
+            extra_data={'user': request.user}
         )
-        serializer.is_valid(raise_exception=True)
-
-        ShoppingCart.objects.get(user=request.user, recipe_id=pk).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=['get'])
     def download_shopping_cart(self, request):
         recipes_id = ShoppingCart.objects.filter(
             user=request.user).values_list('recipe__pk', flat=True)
-        recipes = (Recipe.objects.filter(
-            id__in=recipes_id
-        ).annotate(quantity=Sum(
-            'ingredients__ingredients_in_recipe__amount', filter=Q
-            (
-                ingredients__ingredients_in_recipe__recipe_id__in=recipes_id
-            ))).distinct().values_list(
-            'quantity', 'ingredients_in_recipe__ingredient__name',
-            'ingredients_in_recipe__ingredient__measurement_unit')
+        ingredients = Ingredient.objects.filter(
+            ingredients_in_recipe__recipe_id__in=recipes_id
+        ).annotate(
+            quantity=Sum('ingredients_in_recipe__amount', filter=Q(
+                ingredients_in_recipe__recipe_id__in=recipes_id
+            ))
+        ).values_list(
+            'name', 'measurement_unit', 'quantity'
         )
         result = ''
-        for i in range(len(recipes)):
-            result += (f'|{recipes[i][1]}| --- '
-                       f'|{recipes[i][2]}| --- '
-                       f'|{recipes[i][0]}|\n')
+        for ingredient in ingredients:
+            result += (f'|{ingredient[0]}| --- '
+                       f'|{ingredient[1]}| --- '
+                       f'|{ingredient[2]}|\n')
         text = io.BytesIO()
         with io.TextIOWrapper(text, encoding="utf-8", write_through=True) as f:
             f.write(result)
             response = HttpResponse(text.getvalue(), content_type="text/plain")
-            response[
-                "Content-Disposition"
-            ] = "attachment; filename=shopping_list.txt"
+            response["Content-Disposition"] = "attachment; filename=shopping_list.txt"
             return response
 
 
+#TODO
+# Извините, но я не понимаю данный комментарий.
+# Что Вы имеете ввиду? Прошлый комментарий учтен, миксин есть.
+#TODO
 class FavoriteViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
     queryset = Favorite.objects.all()
     permission_classes = (IsAuthenticated,)

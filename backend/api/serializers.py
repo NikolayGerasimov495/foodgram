@@ -123,19 +123,20 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
             raise ValidationError('Пожалуйста установите тэги')
         if len(attrs['tags']) != len(set(attrs['tags'])):
             raise ValidationError('Тэги должны быть уникальными')
+
+        if not attrs.get('image'):
+            raise ValidationError('Image is required')
+
         return attrs
 
     @transaction.atomic
     def create(self, validated_data):
-        if not validated_data.get('image'):
-            raise ValidationError('Image is required')
-
-        valid_data = dict(validated_data)
-        del valid_data['ingredients']
-        del valid_data['tags']
-
-        recipe = Recipe.objects.create(**valid_data)
-
+        recipe = Recipe.objects.create(author=self.context['request'].user,
+            name=validated_data['name'],
+            text=validated_data['text'],
+            cooking_time=validated_data['cooking_time'],
+            image=validated_data.get('image', None)
+        )
         recipe.tags.set(validated_data['tags'])
 
         self.set_ingredients_to_recipe(
@@ -145,17 +146,19 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        valid_data = dict(validated_data)
-        del valid_data['ingredients']
-        del valid_data['tags']
+        ingredients_data = validated_data.pop('ingredients', [])
+        tags_data = validated_data.pop('tags', [])
 
-        instance = super().update(instance, valid_data)
+        instance = super().update(instance, validated_data)
 
-        instance.tags.set(validated_data['tags'])
-
+        instance.ingredients.clear()
         self.set_ingredients_to_recipe(
             recipe=instance,
-            ingredients=validated_data['ingredients'])
+            ingredients=ingredients_data
+        )
+
+        instance.tags.set(tags_data)
+
         return instance
 
     @staticmethod
@@ -174,7 +177,7 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
                 )
 
             IngredientInRecipe.objects.bulk_create(ingredient_list)
-            recipe.save()
+            # recipe.save()
 
     def to_representation(self, instance):
         return RecipeSerializer(
