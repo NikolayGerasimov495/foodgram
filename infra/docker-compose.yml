@@ -1,0 +1,47 @@
+version: '3.3'
+services:
+
+  db:
+    image: postgres:13.0-alpine
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  backend:
+    build: ../backend/
+    env_file: .env
+    volumes:
+      - static:/app/static
+      - media:/app/media
+    command: >
+      bash -c "./manage.py collectstatic --noinput && ./manage.py migrate  && gunicorn -b 0.0.0.0:8000 foodgram.wsgi"
+    depends_on:
+      - db
+
+  frontend:
+    container_name: foodgram-front
+    build: ../frontend
+    volumes:
+      - ../frontend/:/app/result_build/
+
+  nginx:
+    container_name: foodgram-proxy
+    image: nginx:1.25.4-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ../frontend/build:/usr/share/nginx/html/
+      - ../docs/:/usr/share/nginx/html/api/docs/
+      - static:/var/static
+      - media:/var/media
+    depends_on:
+      - backend
+      - frontend
+
+
+volumes:
+  media:
+  static:
+  pg_data:

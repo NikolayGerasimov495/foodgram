@@ -9,7 +9,7 @@ from recipes.models import Ingredient
 
 
 def set_data(param1, param2):
-    with open(os.path.join(BASE_DIR, '..', 'data', 'ingredients.json')) as file:
+    with open(os.path.join(BASE_DIR, 'ingredients.json')) as file:
         data = json.load(file)
         ingredient_list = []
         for ingredient in data:
