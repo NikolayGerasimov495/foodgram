@@ -222,8 +222,8 @@ class SubscriptionViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
             extra_data={'user': request.user}
         )
 
-class RecipeShortLinkRedirectView(APIView):
 
+class RecipeShortLinkRedirectView(APIView):
     def get(self, request, pk):
         recipe = get_object_or_404(Recipe, id=pk)
         return redirect(f'/recipes/{recipe.id}/')
