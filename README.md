@@ -81,6 +81,6 @@ docker compose exec backend python manage.py upload_data
 ## Автор
 Николай Герасимов
 
-http://gera-foodgram.serveblog.net/
-admin@mail.ru   
-admin
+https://gera-foodgram.serveblog.net/
+root@mail.ru   
+root
