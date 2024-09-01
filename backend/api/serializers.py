@@ -97,7 +97,8 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
     tags = PrimaryKeyRelatedField(queryset=Tag.objects.all(),
                                   many=True)
     cooking_time = serializers.IntegerField(required=True, min_value=1)
-    image = Base64ImageField(required=False)
+    image = Base64ImageField(required=True, allow_null=False,
+                             allow_empty_file=False)
 
     class Meta:
         model = Recipe
@@ -124,8 +125,8 @@ class RecipeCreateUpdateSerializer(serializers.ModelSerializer):
         if len(attrs['tags']) != len(set(attrs['tags'])):
             raise ValidationError('Тэги должны быть уникальными')
 
-        if not attrs.get('image'):
-            raise ValidationError('Image is required')
+        # if not attrs.get('image'):
+        #     raise ValidationError('Image is required')
 
         return attrs
 

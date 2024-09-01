@@ -1,4 +1,10 @@
 version: '3.3'
+
+volumes:
+  media:
+  static:
+  pg_data:
+
 services:
 
   db:
@@ -39,9 +45,3 @@ services:
     depends_on:
       - backend
       - frontend
-
-
-volumes:
-  media:
-  static:
-  pg_data:

@@ -2,10 +2,11 @@ import io
 
 from django.db.models import Sum, Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
 from django_filters.rest_framework import DjangoFilterBackend
 from djoser import views as joser_views
 from rest_framework import status, viewsets
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.permissions import (IsAuthenticated,
                                         IsAuthenticatedOrReadOnly,
@@ -89,7 +90,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(methods=["GET"], detail=True, url_path="get-link")
     def get_link(self, request, pk):
         recipe = get_object_or_404(Recipe, id=pk)
-        short_link = f"{request.scheme}://{request.get_host()}/s/d3{recipe.id}"
+        short_link = f"{request.scheme}://{request.get_host()}/s/{recipe.id}/"
         return Response({"short-link": short_link})
 
     def get_serializer_class(self, *args, **kwargs):
@@ -220,3 +221,9 @@ class SubscriptionViewSet(CreateDestroyObjectMixin, viewsets.ModelViewSet):
             model=Subscription,
             extra_data={'user': request.user}
         )
+
+class RecipeShortLinkRedirectView(APIView):
+
+    def get(self, request, pk):
+        recipe = get_object_or_404(Recipe, id=pk)
+        return redirect(f'/recipes/{recipe.id}/')
